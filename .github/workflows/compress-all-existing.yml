@@ -8,51 +8,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+      - name: Install compression tools
+        run: sudo apt-get install -y optipng jpegoptim
 
-      - name: Install imagemin tools
-        run: npm install imagemin imagemin-pngquant imagemin-mozjpeg glob
-
-      - name: Compress all images
+      - name: Compress PNGs
         run: |
-          node -e "
-          const imagemin = require('imagemin');
-          const pngquant = require('imagemin-pngquant');
-          const mozjpeg = require('imagemin-mozjpeg');
-          const fs = require('fs');
-          const path = require('path');
+          find . -name "*.png" \
+            -not -path "./.github/*" \
+            -not -path "./node_modules/*" \
+            -exec optipng -o5 -quiet {} \;
 
-          async function run() {
-            const files = await imagemin(['**/*.{png,jpg,jpeg}', '!node_modules/**', '!.github/**'], {
-              plugins: [
-                pngquant({ quality: [0.65, 0.85], speed: 1 }),
-                mozjpeg({ quality: 82 })
-              ]
-            });
-
-            let saved = 0;
-            files.forEach(f => {
-              if (f.sourcePath) {
-                const original = fs.statSync(f.sourcePath).size;
-                fs.writeFileSync(f.sourcePath, f.data);
-                const compressed = f.data.length;
-                saved += (original - compressed);
-                console.log(f.sourcePath, '-', Math.round((original - compressed) / 1024) + 'KB saved');
-              }
-            });
-            console.log('Total saved:', Math.round(saved / 1024) + 'KB across', files.length, 'images');
-          }
-          run().catch(console.error);
-          "
+      - name: Compress JPGs
+        run: |
+          find . \( -name "*.jpg" -o -name "*.jpeg" \) \
+            -not -path "./.github/*" \
+            -not -path "./node_modules/*" \
+            -exec jpegoptim --max=82 --strip-all {} \;
 
       - name: Commit compressed images
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: 'chore: compress all existing images [skip ci]'
+          commit_message: "chore: compress all existing images [skip ci]"
           commit_user_name: Image Compressor Bot
           commit_user_email: bot@boltbet.co.za
